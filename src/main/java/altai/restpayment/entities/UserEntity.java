@@ -1,8 +1,9 @@
 package altai.restpayment.entities;
 import jakarta.persistence.*;
 import lombok.Data;
-
+import java.math.BigDecimal;
 import java.util.Collection;
+import java.util.List;
 
 
 @Entity
@@ -18,7 +19,10 @@ public class UserEntity {
     @Column(name = "password")
     private String password;
     @Column(name = "balance")
-    private double balance = 8.0;
+    private BigDecimal balance;
+
+    @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<PaymentEntity> payments;
 
     @ManyToMany
     @JoinTable(

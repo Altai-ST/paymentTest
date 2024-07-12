@@ -38,6 +38,7 @@ public class JwtRequestFilter extends OncePerRequestFilter {
                 log.debug("Время жизни токена вышло");
             }
         }
+
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             UsernamePasswordAuthenticationToken token = new UsernamePasswordAuthenticationToken(
                     username,
