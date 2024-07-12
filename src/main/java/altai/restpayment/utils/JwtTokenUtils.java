@@ -16,11 +16,8 @@ import java.util.stream.Collectors;
 @Component
 public class JwtTokenUtils {
 
-    @Value("${jwt.secret}")
-    private String secret;
-
-    @Value("${jwt.lifetime}")
-    private Duration jwtLifetime;
+    @Value("${jwt.expiration}")
+    private long jwtExpirationInMs;
 
     SecretKey key = Jwts.SIG.HS256.key().build();
 
@@ -32,7 +29,7 @@ public class JwtTokenUtils {
         claims.put("roles", rolesList);
 
         Date issuedDate = new Date();
-        Date expiredDate = new Date(issuedDate.getTime() + jwtLifetime.toMillis());
+        Date expiredDate = new Date(issuedDate.getTime() + jwtExpirationInMs * 1000);
         return Jwts.builder()
                 .claims(claims)
                 .subject(userDetails.getUsername())

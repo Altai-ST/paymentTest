@@ -1,12 +1,12 @@
 package altai.restpayment.services;
 
 
+import altai.restpayment.dtos.RegistrationUserDto;
 import altai.restpayment.entities.UserEntity;
-import altai.restpayment.repositories.RoleRepository;
 import altai.restpayment.repositories.UserRepository;
 import jakarta.transaction.Transactional;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -15,32 +15,43 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
+//@RequiredArgsConstructor
 public class UserService implements UserDetailsService {
-
-    @Autowired
     private UserRepository userRepository;
-
-    @Autowired
-    private RoleRepository roleRepository;
-
-    @Autowired
+    private RoleService roleService;
+    @Lazy
     private PasswordEncoder passwordEncoder;
 
-    public UserEntity findByUsername(String username) {
+    @Autowired
+    public void setUserRepository(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+//
+    @Autowired
+    public void setRoleService(RoleService roleService) {
+        this.roleService = roleService;
+    }
+//
+    @Autowired
+    public void setPasswordEncoder(PasswordEncoder passwordEncoder) {
+        this.passwordEncoder = passwordEncoder;
+    }
+
+
+    public Optional<UserEntity> findByUsername(String username) {
         return userRepository.findByUsername(username);
     }
 
     @Override
     @Transactional
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        if(userRepository.findByUsername(username) == null){
-            throw new UsernameNotFoundException(String.format("Пользователь '%s' не найден", username));
-        }
-        UserEntity user = findByUsername(username);
+        UserEntity user = findByUsername(username).orElseThrow(() -> new UsernameNotFoundException(
+                String.format("Пользователь '%s' не найден", username)
+        ));
         return new org.springframework.security.core.userdetails.User(
                 user.getUsername(),
                 user.getPassword(),
@@ -48,17 +59,11 @@ public class UserService implements UserDetailsService {
         );
     }
 
-    public void save(UserEntity user) {
-        user.setRoles(List.of(roleRepository.findByName("ROLE_USER").get()));
-//        user.setPassword(passwordEncoder.encode(user.getPassword()));
-        userRepository.save(user);
+    public UserEntity createNewUser(RegistrationUserDto registrationUserDto) {
+        UserEntity user = new UserEntity();
+        user.setUsername(registrationUserDto.getUsername());
+        user.setPassword(passwordEncoder.encode(registrationUserDto.getPassword()));
+        user.setRoles(List.of(roleService.getUserRole()));
+        return userRepository.save(user);
     }
-//public UserEntity createNewUser(RegistrationUserDto registrationUserDto) {
-//    User user = new User();
-//    user.setUsername(registrationUserDto.getUsername());
-//    user.setEmail(registrationUserDto.getEmail());
-//    user.setPassword(passwordEncoder.encode(registrationUserDto.getPassword()));
-//    user.setRoles(List.of(roleService.getUserRole()));
-//    return userRepository.save(user);
-//}
 }
