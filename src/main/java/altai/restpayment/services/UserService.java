@@ -1,12 +1,15 @@
 package altai.restpayment.services;
-
-
+import altai.restpayment.dtos.PaymentDto;
+import altai.restpayment.dtos.RegistrationUserDto;
+import altai.restpayment.dtos.UserTransactionsDto;
+import altai.restpayment.entities.PaymentEntity;
 import altai.restpayment.entities.UserEntity;
-import altai.restpayment.repositories.RoleRepository;
+import altai.restpayment.repositories.PaymentRepository;
 import altai.restpayment.repositories.UserRepository;
+import jakarta.persistence.EntityNotFoundException;
 import jakarta.transaction.Transactional;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
@@ -14,33 +17,48 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
+import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
 public class UserService implements UserDetailsService {
-
-    @Autowired
     private UserRepository userRepository;
-
-    @Autowired
-    private RoleRepository roleRepository;
-
-    @Autowired
+    private RoleService roleService;
+    @Lazy
     private PasswordEncoder passwordEncoder;
+    private PaymentRepository paymentRepository;
 
-    public UserEntity findByUsername(String username) {
+    private PaymentService paymentService;
+
+    @Autowired
+    public void setUserRepository(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+//
+    @Autowired
+    public void setRoleService(RoleService roleService) {
+        this.roleService = roleService;
+    }
+//
+    @Autowired
+    public void setPasswordEncoder(PasswordEncoder passwordEncoder) {
+        this.passwordEncoder = passwordEncoder;
+    }
+
+
+    public Optional<UserEntity> findByUsername(String username) {
         return userRepository.findByUsername(username);
     }
 
     @Override
     @Transactional
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        if(userRepository.findByUsername(username) == null){
-            throw new UsernameNotFoundException(String.format("Пользователь '%s' не найден", username));
-        }
-        UserEntity user = findByUsername(username);
+        UserEntity user = findByUsername(username).orElseThrow(() -> new UsernameNotFoundException(
+                String.format("Пользователь '%s' не найден", username)
+        ));
         return new org.springframework.security.core.userdetails.User(
                 user.getUsername(),
                 user.getPassword(),
@@ -48,17 +66,43 @@ public class UserService implements UserDetailsService {
         );
     }
 
-    public void save(UserEntity user) {
-        user.setRoles(List.of(roleRepository.findByName("ROLE_USER").get()));
-//        user.setPassword(passwordEncoder.encode(user.getPassword()));
-        userRepository.save(user);
+    public UserEntity createNewUser(RegistrationUserDto registrationUserDto) {
+        UserEntity user = new UserEntity();
+        user.setUsername(registrationUserDto.getUsername());
+        user.setPassword(passwordEncoder.encode(registrationUserDto.getPassword()));
+        user.setBalance(BigDecimal.valueOf(8.00));
+        user.setRoles(List.of(roleService.getUserRole()));
+        return userRepository.save(user);
     }
-//public UserEntity createNewUser(RegistrationUserDto registrationUserDto) {
-//    User user = new User();
-//    user.setUsername(registrationUserDto.getUsername());
-//    user.setEmail(registrationUserDto.getEmail());
-//    user.setPassword(passwordEncoder.encode(registrationUserDto.getPassword()));
-//    user.setRoles(List.of(roleService.getUserRole()));
-//    return userRepository.save(user);
-//}
+
+
+    public UserTransactionsDto getUserInfoWithTransactions(Long userId) {
+        UserEntity userEntity = userRepository.findById(userId)
+                .orElseThrow(() -> new EntityNotFoundException("User with id " + userId + " not found"));
+
+        UserTransactionsDto userTransactionsDto = new UserTransactionsDto();
+        userTransactionsDto.setId(userEntity.getId());
+        userTransactionsDto.setUsername(userEntity.getUsername());
+        userTransactionsDto.setBalance(userEntity.getBalance());
+
+        List<PaymentEntity> payments = userEntity.getPayments();
+        if (payments.isEmpty()) {
+            userTransactionsDto.setPayments(Collections.emptyList());
+            userTransactionsDto.setTransactionStatus("Не совершал транзакции");
+        } else {
+            List<PaymentDto> paymentDtos = payments.stream()
+                    .map(payment -> {
+                        PaymentDto paymentDto = new PaymentDto();
+                        paymentDto.setId(payment.getId());
+                        paymentDto.setAmount(payment.getAmount());
+                        paymentDto.setTimestamp(payment.getTimestamp());
+                        return paymentDto;
+                    })
+                    .collect(Collectors.toList());
+            userTransactionsDto.setPayments(paymentDtos);
+            userTransactionsDto.setTransactionStatus("Транзакции присутствуют");
+        }
+
+        return userTransactionsDto;
+    }
 }
