@@ -1,7 +1,6 @@
 package altai.restpayment.configs;
 
 import altai.restpayment.services.UserService;
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -27,7 +26,7 @@ public class SecurityConfig{
 
     private UserService userService;
     private JwtRequestFilter jwtRequestFilter;
-
+    private BruteForceProtectionFilter bruteForceProtectionFilter;
 
     @Autowired
     public void setUserService(UserService userService) {
@@ -37,6 +36,11 @@ public class SecurityConfig{
     @Autowired
     public void setJwtRequestFilter(JwtRequestFilter jwtRequestFilter) {
         this.jwtRequestFilter = jwtRequestFilter;
+    }
+
+    @Autowired
+    public void setBruteForceProtectionFilter(BruteForceProtectionFilter bruteForceProtectionFilter) {
+        this.bruteForceProtectionFilter = bruteForceProtectionFilter;
     }
 
     @Bean
@@ -58,6 +62,7 @@ public class SecurityConfig{
                 )
                 .sessionManagement(manager -> manager.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authenticationProvider(daoAuthenticationProvider())
+                .addFilterBefore(bruteForceProtectionFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtRequestFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }

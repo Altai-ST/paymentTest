@@ -5,8 +5,10 @@ import altai.restpayment.dtos.RegistrationUserDto;
 import altai.restpayment.dtos.UserDto;
 import altai.restpayment.entities.UserEntity;
 import altai.restpayment.exceptions.AppError;
+import altai.restpayment.services.LoginAttemptService;
 import altai.restpayment.services.UserService;
 import altai.restpayment.utils.JwtTokenUtils;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,20 +25,34 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
     private final UserService userService;
     private final JwtTokenUtils jwtTokenUtils;
-
     private final AuthenticationManager authenticationManager;
+    private final LoginAttemptService loginAttemptService;
+
+    private final HttpServletRequest request;
 
     @PostMapping("/auth")
     public ResponseEntity<?> createAuthToken(@RequestBody JwtRequest authRequest){
-        try {
-            authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(authRequest.getUsername(), authRequest.getPassword()));
-        }catch (BadCredentialsException e){
-            return new ResponseEntity<>(new AppError(HttpStatus.UNAUTHORIZED.value(), "Неправильный логин или пароль"), HttpStatus.UNAUTHORIZED);
-        }
+        String ipAddress = request.getRemoteAddr();
 
-        UserDetails userDetails = userService.loadUserByUsername(authRequest.getUsername());
-        String token = jwtTokenUtils.generateToken(userDetails);
-        return ResponseEntity.ok(new JwtResponse(token));
+        boolean isAuthenticated = userService.authenticate(authRequest.getUsername(), authRequest.getPassword(), ipAddress);
+
+        if (isAuthenticated) {
+            try {
+                authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(authRequest.getUsername(), authRequest.getPassword()));
+            } catch (BadCredentialsException e) {
+                return new ResponseEntity<>(new AppError(HttpStatus.UNAUTHORIZED.value(), "Неправильный логин или пароль"), HttpStatus.UNAUTHORIZED);
+            }
+
+            UserDetails userDetails = userService.loadUserByUsername(authRequest.getUsername());
+            String token = jwtTokenUtils.generateToken(userDetails);
+            return ResponseEntity.ok(new JwtResponse(token));
+        }else{
+            if(loginAttemptService.isBlocked(ipAddress)){
+                return new ResponseEntity<>(new AppError(HttpStatus.UNAUTHORIZED.value(), "Слишком много попыток, повторите через 5 минут"), HttpStatus.UNAUTHORIZED);
+            }else{
+                return new ResponseEntity<>(new AppError(HttpStatus.UNAUTHORIZED.value(), "Неправильный логин или пароль"), HttpStatus.UNAUTHORIZED);
+            }
+        }
     }
 
     @PostMapping("/registration")

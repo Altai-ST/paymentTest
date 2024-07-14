@@ -30,8 +30,14 @@ public class UserService implements UserDetailsService {
     @Lazy
     private PasswordEncoder passwordEncoder;
     private PaymentRepository paymentRepository;
+    private LoginAttemptService loginAttemptService;
 
     private PaymentService paymentService;
+
+    @Autowired
+    public void setLoginAttemptService(LoginAttemptService loginAttemptService) {
+        this.loginAttemptService = loginAttemptService;
+    }
 
     @Autowired
     public void setUserRepository(UserRepository userRepository) {
@@ -64,6 +70,26 @@ public class UserService implements UserDetailsService {
                 user.getPassword(),
                 user.getRoles().stream().map(role -> new SimpleGrantedAuthority(role.getName())).collect(Collectors.toList())
         );
+    }
+
+    public boolean authenticate(String username, String rawPassword, String ipAddress) {// Получите IP адрес текущего запроса
+
+        UserEntity user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+
+        if (loginAttemptService.isBlocked(ipAddress)) {
+            throw new RuntimeException("IP address is blocked due to too many login attempts.");
+        }
+
+        boolean passwordMatches = passwordEncoder.matches(rawPassword, user.getPassword());
+
+        if (passwordMatches) {
+            loginAttemptService.loginSucceeded(ipAddress);
+        } else {
+            loginAttemptService.loginFailed(ipAddress);
+        }
+
+        return passwordMatches;
     }
 
     public UserEntity createNewUser(RegistrationUserDto registrationUserDto) {
