@@ -43,6 +43,17 @@ public class SecurityConfig{
         this.bruteForceProtectionFilter = bruteForceProtectionFilter;
     }
 
+
+    private static final String[] SWAGGER_WHITELIST = {
+            "/swagger-ui.html",
+            "/swagger-ui/**",
+            "/v3/api-docs/**",
+            "/swagger-resources/**",
+            "/swagger-resources",
+            "/webjars/**",
+            "/configuration/**"
+    };
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
@@ -56,6 +67,7 @@ public class SecurityConfig{
                     return corsConfiguration;
                 }))
                 .authorizeHttpRequests((authorize) -> authorize
+                        .requestMatchers(SWAGGER_WHITELIST).permitAll()
                         .requestMatchers("/auth/**").permitAll()
                         .requestMatchers("/registration/**").permitAll()
                         .anyRequest().authenticated()
